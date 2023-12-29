@@ -1,0 +1,86 @@
+#!/bin/sh
+
+# Default values
+language="us"
+output=""
+output_dir="."
+
+display_help() {
+    echo "Usage: $0 [-l language] [-o output_name] [-d output_directory] word"
+    echo "Options:"
+    echo "  -l, --language   <language>   Specify the language/accent for pronunciation (us or gb; default=us)"
+    echo "  -o, --output     <output>     Specify the output name of the script (by default, the file is named based on its remote file name)"
+    echo "  -d, --output-dir <output_dir> Specify the output directory of the downloaded file (default is the current directory)"
+    echo "  -h, --help                    Display this help message"
+    exit 1
+}
+
+validate_language() {
+    if [ "$1" != "us" ] && [ "$1" != "gb" ]; then
+        echo "Error: Invalid accent \"$language\". Valid accents: (\"us\" (American) or \"gb\" (British))"
+        exit 1
+    fi
+}
+
+while [ $# -gt 0 ]; do
+    case $1 in
+        -l | --language)
+            shift
+            if [ -z "$1" ] || [ "${1#-}" != "$1" ]; then
+                echo "Error: Missing argument for option -l."
+                display_help
+            fi
+            language=$1
+            ;;
+        -o | --output)
+            shift
+            if [ -z "$1" ] || [ "${1#-}" != "$1" ]; then
+                echo "Error: Missing argument for option -o."
+                display_help
+            fi
+            output=$1
+            ;;
+        -d | --output-dir)
+            shift
+            if [ -z "$1" ] || [ "${1#-}" != "$1" ]; then
+                echo "Error: Missing argument for option -d."
+                display_help
+            fi
+            output_dir=$1
+            ;;
+        -h | --help)
+            display_help
+            ;;
+        -*)
+            echo "Error: Unknown option $1."
+            display_help
+            ;;
+        *)
+            word=$1
+            ;;
+    esac
+    shift
+done
+
+if [ -z "$word" ]; then
+    echo "Error: Please provide a word."
+    display_help
+fi
+
+url=$(curl --location --silent "https://www.oxfordlearnersdictionaries.com/definition/english/$word" \
+        | grep -o 'data-src-mp3="https://[^"]*'"$word"'[^"]*\.mp3"' \
+        | sed -e 's/data-src-mp3=//' -e 's/"//g' \
+        | grep "_${language}_" \
+        | head -n 1)
+
+if [ -z "$url" ]; then
+    echo "Error: Pronunciation not found for the specified word and language."
+    exit 1
+fi
+
+if [ -z "$output" ]; then
+    output=$(basename "$url")
+fi
+
+curl --location --fail --create-dirs --output "$output_dir/$output" "$url"
+echo "Pronunciation downloaded successfully to: $output_dir/$output"
